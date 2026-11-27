@@ -88,6 +88,11 @@
   @media(min-width:960px){.cat-grid{grid-template-columns:repeat(4,1fr)}}
   .cat-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;cursor:pointer;box-shadow:var(--shadow);text-align:start;padding:0;width:100%}
   .cat-card:active{transform:scale(.985)}
+  .subchips{display:flex;gap:.45rem;overflow-x:auto;padding:.2rem 0 .6rem;scrollbar-width:none;position:sticky;top:0;background:var(--bg,#fff);z-index:5}
+  .subchips::-webkit-scrollbar{display:none}
+  .subchip{flex:0 0 auto;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:.45rem .9rem;font:inherit;cursor:pointer}
+  .subchip.on{background:#0a7a3d;color:#fff;border-color:#0a7a3d;font-weight:700}
+  .subhead{font-size:1.05rem;font-weight:800;margin:1.1rem 0 .5rem}
   .cat-media{aspect-ratio:4/2.9;background:var(--surface2);display:flex;align-items:center;justify-content:center;overflow:hidden}
   .cat-media img{width:100%;height:100%;object-fit:cover}
   .cat-media .cat-emoji{font-size:3rem}
@@ -285,6 +290,7 @@
         <h2 id="listTitle"></h2>
       </div>
       <div class="empty-msg hidden" id="listNote" style="margin-top:.5rem">💲 أسعار الخضار والفاكهة متغيرة يومياً — السعر النهائي يُحدد عند تأكيد الطلب 📞</div>
+      <div class="subchips hidden" id="subChips"></div>
       <div class="prod-grid" id="listGrid" style="margin-top:.7rem"></div>
       <div class="empty-msg hidden" id="listEmpty">مفيش منتجات هنا دلوقتي 🤷</div>
     </section>
@@ -324,6 +330,7 @@ var state = {
   cart: {},               // productId -> qty
   view: "home",           // home | category | search | offers
   currentCategory: null,
+  currentSub: null,
   searchQuery: "",
   payment: "cash",
   token: localStorage.getItem("wm_token") || "",
@@ -469,11 +476,53 @@ function renderCartBar(){
   } else $("cartBar").classList.add("hidden");
 }
 function openCategory(name){
-  state.view = "category"; state.currentCategory = name; state.searchQuery = ""; $("searchInput").value = "";
+  state.view = "category"; state.currentCategory = name; state.currentSub = null; state.searchQuery = ""; $("searchInput").value = "";
   renderList(); window.scrollTo({ top: 0 });
 }
 function openOffers(){
   state.view = "offers"; renderList(); window.scrollTo({ top: 0 });
+}
+
+/* ================== الأقسام الفرعية (زي طلبات) ================== */
+/* قواعد تلقائية من اسم المنتج: أي منتج جديد (من الاستيراد أو من المدير) يدخل قسمه الفرعي لوحده */
+var SUBCATS = {
+"بقالة": [["أرز وسكر ودقيق",["أرز","سكر","دقيق"]],["زيوت وسمن",["زيت","سمنة"]],["صلصات وتوابل",["صلصة","خل","ملح","بهارات","خلطة","معجون","مايونيز","كاتشب","طحينة"]],["حلاوة ومربى",["حلاوة","مربى"]],["خليط كيك وحلويات",["خليط","كريم كراميل","أم علي","خميرة","كريمة","بقسماط","تيميز"]],["معلبات",["تونة","فول"]]],
+"مكرونة": [["مكرونة الملكة",["الملكة"]],["مكرونة حواء",["حواء"]],["مكرونة ريجينا",["ريجينا"]]],
+"ألبان وأجبان وبيض": [["أجبان",["جبنة"]],["حليب ولبن",["حليب","لبن"]],["زبادي وقشطة",["زبادي","قشطة"]],["بيض",["بيض"]]],
+"مشروبات": [["مياه",["مياه","بركة"]],["مشروبات غازية",["كوكاكولا","كاكولا","بيبسي","فانتا","فنتا","مريندا","اسبريت","سبرايت","شوبيس","شويبس","بيج"]],["مشروبات طاقة",["طاقة","طاقه","فولت","ريد بول"]],["شعير ومالت",["بريل","فيروز"]]],
+"حلويات وتسالي": [["شوكولاتة وبسكويت",["شوكولاتة","بسكويت"]],["تسالي ومقرمشات",["شيبسي","لب سوري","فشار"]],["حلويات",["ويفر","كيك","مصاصة","لبان"]]],
+"منظفات وعناية": [["مسحوق غسيل",["مسحوق غسيل"]],["منظفات المنزل",["سائل أطباق","كلور","منظف","بيروسول","إسفنجة"]],["عناية شخصية",["صابون","شامبو","معجون","مناديل","حلاقة","كامي"]]],
+"عصائر": [["عصير 1 لتر",["1 لتر"]],["عصير صغير",["225","235"]]],
+"سجاير": [["كليوباترا",["كليوباترا"]],["مارلبورو",["مارلبورو"]],["إل إم",["إل إم"]],["أخرى",["وينستون","دافيدوف"]]],
+"اندومي": [["اندومي حار",["حار"]],["اندومي بالجبنة",["جبنة"]],["اندومي عادي",["دجاج","خضار","لحم","جمبري","كاري","سجق","فلفل"]]],
+"شيكولاته": [["ألواح شوكولاتة",["كيت كات","سنيكرز","مارس","تويكس","جالاكسي","كادبوري","باونتي","ميلكا","فليك"]],["شوكولاتة قابلة للدهن",["نوتيلا"]]],
+"القهوة والشاي": [["قهوة",["قهوة"]],["نسكافيه وبونجورنو",["نسكافيه","بونجورنو"]],["شاي",["شاي","ليبتون"]],["أعشاب ومشروبات ساخنة",["نعناع","ينسون","قرفة","كاكاو","حليب بودرة"]]],
+"شيبسي ومقرمشات": [["شيبسي",["شيبسي","دوريتوس","برينجلز","تايجر"]],["مقرمشات وفشار",["كاراتيه","مقرمشات","فشار"]]],
+"خضار وفاكهة": [["خضار",["طماطم","بطاطس","بصل","خيار","جزر","ليمون"]],["فاكهة",["موز","برتقال","تفاح","عنب"]]],
+"مجمدات": [["دواجن ولحوم",["دجاج","لحم","ناجتس","بانيه","شرائح"]],["خضار وفاكهة مجمدة",["بطاطس","بسلة","خضار مشكل","فراولة"]],["آيس كريم وبيتزا",["آيس كريم","بيتزا"]]]
+};
+function subcatOf(p){
+  var rules = SUBCATS[p.category];
+  if (!rules) return "أخرى";
+  var name = p.name || "";
+  for (var i=0;i<rules.length;i++){
+    var kws = rules[i][1];
+    for (var j=0;j<kws.length;j++) if (name.indexOf(kws[j]) !== -1) return rules[i][0];
+  }
+  return "أخرى";
+}
+function groupBySub(items){
+  var g = {}, order = [];
+  items.forEach(function(p){
+    var s2 = subcatOf(p);
+    if (!g[s2]) { g[s2] = []; order.push(s2); }
+    g[s2].push(p);
+  });
+  /* المتوفر أولاً داخل كل قسم فرعي عشان العميل يلاقي اللي يقدر يطلبه بسرعة */
+  order.forEach(function(s2){ g[s2].sort(function(a,b){ return (b.available?1:0) - (a.available?1:0); }); });
+  var out = {};
+  order.forEach(function(s2){ out[s2] = g[s2]; });
+  return out;
 }
 function renderList(){
   var title = "", items = [];
@@ -493,9 +542,36 @@ function renderList(){
   $("listSection").classList.remove("hidden");
   $("listTitle").textContent = title;
   var listNote = $("listNote"); if (listNote) listNote.classList.toggle("hidden", !(state.view === "category" && state.currentCategory === "خضار وفاكهة"));
-  $("listGrid").innerHTML = items.map(productCard).join("");
+  var chips = $("subChips"), grid = $("listGrid");
+  if (state.view === "category") {
+    var groups = groupBySub(items), names = Object.keys(groups);
+    if (names.length > 1) {
+      chips.classList.remove("hidden");
+      var ch = '<button type="button" class="subchip'+(state.currentSub ? "" : " on")+'" data-sub="">الكل ('+items.length+')</button>';
+      names.forEach(function(n){ ch += '<button type="button" class="subchip'+(state.currentSub === n ? " on" : "")+'" data-sub="'+esc(n)+'">'+esc(n)+' ('+groups[n].length+')</button>'; });
+      chips.innerHTML = ch;
+      var btns = chips.querySelectorAll("[data-sub]");
+      for (var i=0;i<btns.length;i++) btns[i].addEventListener("click", function(){ state.currentSub = this.getAttribute("data-sub") || null; renderList(); });
+    } else chips.classList.add("hidden");
+    if (state.currentSub && groups[state.currentSub]) {
+      grid.className = "prod-grid";
+      grid.innerHTML = groups[state.currentSub].map(productCard).join("");
+    } else if (names.length > 1) {
+      grid.className = "";
+      var html = "";
+      names.forEach(function(n){ html += '<h3 class="subhead">'+esc(n)+'</h3><div class="prod-grid">' + groups[n].map(productCard).join("") + '</div>'; });
+      grid.innerHTML = html;
+    } else {
+      grid.className = "prod-grid";
+      grid.innerHTML = items.map(productCard).join("");
+    }
+  } else {
+    chips.classList.add("hidden");
+    grid.className = "prod-grid";
+    grid.innerHTML = items.map(productCard).join("");
+  }
   $("listEmpty").classList.toggle("hidden", items.length > 0);
-  bindProductCards($("listGrid"));
+  bindProductCards(grid);
 }
 function goHome(){
   state.view = "home"; state.currentCategory = null;
