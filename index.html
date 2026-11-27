@@ -508,6 +508,8 @@ var SUBCATS = {
 "مجمدات": [["دواجن ولحوم",["دجاج","لحم","ناجتس","بانيه","شرائح","كفتة","جمبري","سمك","سجق","لانشون"]],["معجنات مجمدة",["معجنات","جلاش","سمبوسك","عزة"]],["آيس كريم وبيتزا",["آيس كريم","بيتزا","آيس"]],["خضار وفاكهة مجمدة",["بطاطس","بسلة","خضار مشكل","فراولة","بسمة","ملوخية","بامية","سبانخ","مجمد","مجمدة","فريتس","فرايز","مانجو"]]]
 };
 function subcatOf(p){
+  /* القسم الفرعي اللي اختاره صاحب المحل/المساعد من المدير يكسب؛ لو مفيش اختيار مخزّن نرجع للقواعد التلقائية من الاسم */
+  if (p.subcategory) return p.subcategory;
   var rules = SUBCATS[p.category];
   if (!rules) return "أخرى";
   var name = p.name || "";
@@ -516,6 +518,13 @@ function subcatOf(p){
     for (var j=0;j<kws.length;j++) if (name.indexOf(kws[j]) !== -1) return rules[i][0];
   }
   return "أخرى";
+}
+/* أسماء الأقسام الفرعية بتاعة قسم رئيسي — نفس ترتيب قواعد SUBCATS + "أخرى" في الآخر (للقايمة المنسدلة في فورم المنتج) */
+function subcatNamesFor(cat){
+  var rules = SUBCATS[cat] || [];
+  var names = rules.map(function(r){ return r[0]; });
+  names.push("أخرى");
+  return names;
 }
 function groupBySub(items){
   var g = {}, order = [];
@@ -979,7 +988,7 @@ function renderAdminProducts(body){
 function adminProductRow(p){
   var media = p.image_url ? '<img src="'+esc(p.image_url)+'" alt="" onerror="this.parentNode.textContent=\''+esc(p.emoji||"🛒")+'\'">' : esc(p.emoji||"🛒");
   return '<div class="adm-card adm-row"><div class="adm-thumb">'+media+'</div><div class="adm-info"><b>'+esc(p.name)+'</b>'
-    + '<div class="sub">'+esc(p.category)+' • '+money(p.price)+(p.old_price ? ' <s>'+money(p.old_price)+'</s>' : '')+(p.unit ? ' • '+esc(p.unit) : '')+'</div></div>'
+    + '<div class="sub">'+esc(p.category)+' • '+esc(subcatOf(p))+' • '+money(p.price)+(p.old_price ? ' <s>'+money(p.old_price)+'</s>' : '')+(p.unit ? ' • '+esc(p.unit) : '')+'</div></div>'
     + '<button type="button" class="toggle-btn '+(p.available ? "on" : "off")+'" data-avail="'+p.id+'">'+(p.available ? "✅ متوفر" : "🚫 غير متوفر")+'</button>'
     + '<button type="button" class="icon-btn" data-editp="'+p.id+'" aria-label="تعديل">✏️</button>'
     + '<button type="button" class="icon-btn danger" data-delp="'+p.id+'" aria-label="حذف">🗑️</button></div>';
@@ -988,7 +997,7 @@ function bindAdminProductRows(body){
   var av = body.querySelectorAll("[data-avail]"), ed = body.querySelectorAll("[data-editp]"), del = body.querySelectorAll("[data-delp]"), i;
   for (i=0;i<av.length;i++) av[i].addEventListener("click", function(){
     var p = productById(Number(this.getAttribute("data-avail"))); if (!p) return;
-    var d = { id: p.id, name: p.name, category: p.category, price: p.price, old_price: p.old_price, unit: p.unit, emoji: p.emoji, available: !p.available, image_url: p.image_url || "" };
+    var d = { id: p.id, name: p.name, category: p.category, subcategory: p.subcategory || "", price: p.price, old_price: p.old_price, unit: p.unit, emoji: p.emoji, available: !p.available, image_url: p.image_url || "" };
     api("update_product", { data: d }).then(function(res){ afterEdit(res, p.available ? "بقى غير متوفر 🚫" : "بقى متوفر ✅"); })
       .catch(function(e){ toast("⚠️ " + e.message); });
   });
@@ -1048,6 +1057,7 @@ function openProductForm(p, defaultCat){
     '<form id="prodForm">' +
     '<div class="field"><label>اسم المنتج *</label><input id="pfName" type="text" value="'+esc(p.name)+'" placeholder="مثال: أرز مصري فاخر"></div>' +
     '<div class="field"><label>القسم *</label><select id="pfCat">'+catOpts+'</select></div>' +
+    '<div class="field"><label>القسم الفرعي</label><select id="pfSubcat"></select><div class="hint" style="margin-top:.3rem">بيتحدد لوحده من اسم المنتج — غيّره بس لو التخمين غلط والمنتج لازم يظهر في قسم فرعي تاني.</div></div>' +
     '<div class="field"><label>السعر (جنيه) * — اكتب 0 لو السعر متغير يومياً</label><input id="pfPrice" type="number" step="0.01" min="0" value="'+(p.price === "" ? "" : p.price)+'" dir="ltr" style="text-align:right"></div>' +
     '<div class="field"><label>السعر قبل الخصم (اختياري — لو في عرض)</label><input id="pfOld" type="number" step="0.01" min="0" value="'+(p.old_price == null ? "" : p.old_price)+'" dir="ltr" style="text-align:right"></div>' +
     '<div class="field"><label>الوحدة</label><input id="pfUnit" type="text" value="'+esc(p.unit||"")+'" placeholder="مثال: كيس 1 كجم / زجاجة 1 لتر"></div>' +
@@ -1057,6 +1067,28 @@ function openProductForm(p, defaultCat){
     '<button type="submit" class="big-btn btn-brand" id="pfSave">'+(isNew ? "➕ إضافة المنتج" : "💾 حفظ التعديل")+'</button>' +
     '<div style="height:1.6rem"></div></form>');
   bindImagePicker();
+  /* القسم الفرعي: الافتراضي هو التخمين التلقائي من الاسم، ويتحدث مع الاسم طول ما المستخدم مختارش بنفسه */
+  var subcatTouched = !!(p.subcategory);
+  function pickSubcatOpt(v){
+    var sel = $("pfSubcat");
+    for (var i=0;i<sel.options.length;i++) if (sel.options[i].value === v) { sel.selectedIndex = i; return; }
+    sel.value = "أخرى";
+  }
+  function fillSubcatOpts(){
+    var names = subcatNamesFor($("pfCat").value);
+    $("pfSubcat").innerHTML = names.map(function(n){ return '<option value="'+esc(n)+'">'+esc(n)+'</option>'; }).join("");
+  }
+  function autoSubcat(){
+    return subcatOf({ name: $("pfName").value.trim(), category: $("pfCat").value, subcategory: "" });
+  }
+  function resetSubcatDefault(){
+    fillSubcatOpts();
+    pickSubcatOpt((p.subcategory && p.subcategory !== "") ? p.subcategory : autoSubcat());
+  }
+  resetSubcatDefault();
+  $("pfCat").addEventListener("change", function(){ subcatTouched = false; resetSubcatDefault(); });
+  $("pfName").addEventListener("input", function(){ if (!subcatTouched) pickSubcatOpt(autoSubcat()); });
+  $("pfSubcat").addEventListener("change", function(){ subcatTouched = true; });
   var avail = !!p.available;
   $("pfAvail").addEventListener("click", function(){
     avail = !avail; this.className = "toggle-btn " + (avail ? "on" : "off"); this.textContent = avail ? "✅ متوفر" : "🚫 غير متوفر";
@@ -1067,7 +1099,7 @@ function openProductForm(p, defaultCat){
     if (!name) { toast("اكتب اسم المنتج"); return; }
     if (isNaN(price) || price < 0) { toast("اكتب سعر صح"); return; }
     var old = $("pfOld").value === "" ? null : parseFloat($("pfOld").value);
-    var data = { name: name, category: $("pfCat").value, price: price, old_price: isNaN(old) ? null : old,
+    var data = { name: name, category: $("pfCat").value, subcategory: $("pfSubcat").value, price: price, old_price: isNaN(old) ? null : old,
       unit: $("pfUnit").value.trim(), emoji: $("pfEmoji").value.trim() || "🛒", available: avail, image_url: formImageData || "" };
     if (!isNew) data.id = p.id;
     var btn = $("pfSave"); btn.disabled = true; btn.textContent = "بيتحفظ… ⏳";
