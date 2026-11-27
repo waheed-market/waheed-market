@@ -341,6 +341,7 @@ function fmt(n){ n = Number(n)||0; return (Math.round(n*100)/100).toString(); }
 function money(n){ return fmt(n) + " جنيه"; }
 function varPrice(p){ return Number(p.price) === 0; }
 function hasVarPrice(){ return cartEntries().some(function(e){ return varPrice(e.p); }); }
+function hasPreorder(){ return cartEntries().some(function(e){ return !e.p.available; }); }
 function toast(msg){
   var t = document.createElement("div"); t.className = "toast";
   t.innerHTML = "<span></span>"; t.firstChild.textContent = msg;
@@ -412,10 +413,10 @@ function productCard(p){
     : '<span class="p-emoji">'+esc(p.emoji||"🛒")+'</span>';
   var offer = (!varPrice(p) && p.old_price && Number(p.old_price) > Number(p.price))
     ? '<span class="offer-badge">وفّر '+money(Number(p.old_price)-Number(p.price))+'</span>' : "";
-  var unav = !p.available ? '<span class="unavail-badge">غير متوفر حالياً</span>' : "";
+  var unav = !p.available ? '<span class="unavail-badge">غير متوفر — اطلبها وهنوفرها لك</span>' : "";
   var ctrl;
-  if (!p.available) ctrl = '<button type="button" class="add-btn" disabled>غير متوفر حالياً</button>';
-  else if (inCart > 0) ctrl = '<div class="qty-ctrl"><button type="button" data-dec="'+p.id+'" aria-label="تقليل">−</button><span class="q">'+inCart+'</span><button type="button" data-inc="'+p.id+'" aria-label="زيادة">+</button></div>';
+  if (inCart > 0) ctrl = '<div class="qty-ctrl"><button type="button" data-dec="'+p.id+'" aria-label="تقليل">−</button><span class="q">'+inCart+'</span><button type="button" data-inc="'+p.id+'" aria-label="زيادة">+</button></div>';
+  else if (!p.available) ctrl = '<button type="button" class="add-btn" data-add="'+p.id+'">🛒 اطلبها وهنوفرها لك</button>';
   else ctrl = '<button type="button" class="add-btn" data-add="'+p.id+'">＋ أضف للسلة 🛒</button>';
   return '<article class="prod-card"><div class="prod-media">'+offer+media+unav+'</div><div class="prod-body">'
     + '<div class="prod-name">'+esc(p.name)+'</div>'
@@ -437,7 +438,7 @@ function refreshProductAreas(){
 }
 function changeQty(id, delta){
   var p = productById(id);
-  if (!p || !p.available) return;
+  if (!p) return;
   var q = (state.cart[id] || 0) + delta;
   if (q <= 0) delete state.cart[id]; else state.cart[id] = q;
   refreshProductAreas();
@@ -577,7 +578,9 @@ function renderCartItems(){
   if (!entries.length) { closeModal(); toast("السلة بقت فاضية 🛒"); return; }
   box.innerHTML = entries.map(function(e){
     var media = e.p.image_url ? '<img src="'+esc(e.p.image_url)+'" alt="" onerror="this.parentNode.textContent=\''+esc(e.p.emoji||"🛒")+'\'">' : esc(e.p.emoji||"🛒");
-    return '<div class="cart-item"><div class="ci-media">'+media+'</div><div class="ci-info"><div class="ci-name">'+esc(e.p.name)+'</div><div class="ci-price">'+(varPrice(e.p) ? 'السعر متغير — يُحدد عند التأكيد × '+e.qty : money(e.p.price)+' × '+e.qty+' = '+money(Number(e.p.price)*e.qty))+'</div></div>'
+    var priceTxt = varPrice(e.p) ? 'السعر متغير — يُحدد عند التأكيد × '+e.qty : money(e.p.price)+' × '+e.qty+' = '+money(Number(e.p.price)*e.qty);
+    if (!e.p.available) priceTxt += ' • هنوفرهولك مع الطلب 📦';
+    return '<div class="cart-item"><div class="ci-media">'+media+'</div><div class="ci-info"><div class="ci-name">'+esc(e.p.name)+'</div><div class="ci-price">'+priceTxt+'</div></div>'
       + '<div class="qty-ctrl sm"><button type="button" data-cdec="'+e.p.id+'" aria-label="تقليل">−</button><span class="q">'+e.qty+'</span><button type="button" data-cinc="'+e.p.id+'" aria-label="زيادة">+</button></div></div>';
   }).join("");
   var inc = box.querySelectorAll("[data-cinc]"), dec = box.querySelectorAll("[data-cdec]"), i;
@@ -592,6 +595,7 @@ function renderCartTotals(){
   if (del > 0 && free > 0) progress = '<div class="free-progress">ضيف منتجات بـ '+money(free - sub)+' كمان والتوصيل يبقى مجاني 🎉</div>';
   if (del === 0) progress = '<div class="free-progress">🎉 التوصيل مجاني لطلبك!</div>';
   if (hasVarPrice()) progress += '<div class="free-progress">💲 في أصناف سعرها متغير (خضار وفاكهة) — الإجمالي النهائي يتحدد عند تأكيد الطلب 📞</div>';
+  if (hasPreorder()) progress += '<div class="free-progress">📦 في أصناف غير متوفرة هنوفرها لك — هنأكد توفرها معاك قبل التوصيل</div>';
   box.innerHTML = progress
     + '<div class="t-row"><span>المجموع الفرعي</span><span>'+money(sub)+'</span></div>'
     + '<div class="t-row"><span>التوصيل</span><span>'+(del === 0 ? "مجاني 🎉" : money(del))+'</span></div>'
@@ -624,6 +628,7 @@ function checkoutData(){
 function placeOrder(){
   var data = checkoutData(); if (!data) return;
   var hasVar = hasVarPrice();
+  var hasPre = hasPreorder();
   var btn = $("placeOrderBtn"); btn.disabled = true; btn.textContent = "بيتبعت الطلب… ⏳";
   api("placeOrder", data).then(function(j){
     state.cart = {}; refreshProductAreas();
@@ -633,6 +638,7 @@ function placeOrder(){
       '<p>رقم الطلب<br><span class="ord-num">#'+esc(j.order_id)+'</span></p>' +
       '<p style="font-weight:800">الإجمالي: '+money(j.total)+' <span class="hint">(شامل التوصيل '+ (Number(j.delivery) === 0 ? "المجاني" : money(j.delivery)) +')</span></p>' +
       (hasVar ? '<p class="hint">💲 في أصناف سعرها متغير يومياً — هنأكد سعرها معاك قبل التوصيل 📞</p>' : '') +
+      (hasPre ? '<p class="hint">📦 في أصناف غير متوفرة هنوفرها لك — هنأكد توفرها معاك قبل التوصيل.</p>' : '') +
       '<p class="hint">طريقة الدفع: '+esc(payLabel(data.payment_method))+(data.payment_method !== "cash" ? ' — حوّل على الرقم '+esc(payNumber(data.payment_method === "vodafone_cash" ? "vodafone" : "instapay")) : "")+'</p>' +
       '<button type="button" class="big-btn btn-brand" onclick="closeModal()">تمام، كمّل تسوّق 🛒</button></div>');
   }).catch(function(e){
@@ -649,7 +655,13 @@ function orderViaWhatsApp(){
   else if (wa.indexOf("20") !== 0) wa = "20" + wa;
   var sub = cartSubtotal(), del = deliveryFor(sub);
   var lines = ["🛒 طلب جديد من وحيد ماركت", "—————————"];
-  cartEntries().forEach(function(e){ lines.push("• " + e.p.name + " × " + e.qty + (varPrice(e.p) ? " = السعر متغير (يُحدد عند التأكيد)" : " = " + money(Number(e.p.price) * e.qty))); });
+  var availEntries = cartEntries().filter(function(e){ return e.p.available; });
+  var preEntries = cartEntries().filter(function(e){ return !e.p.available; });
+  availEntries.forEach(function(e){ lines.push("• " + e.p.name + " × " + e.qty + (varPrice(e.p) ? " = السعر متغير (يُحدد عند التأكيد)" : " = " + money(Number(e.p.price) * e.qty))); });
+  if (preEntries.length) {
+    lines.push("📦 أصناف هنوفرها لك:");
+    preEntries.forEach(function(e){ lines.push("• " + e.p.name + " × " + e.qty + " = " + money(Number(e.p.price) * e.qty) + " (هنوفرهولك)"); });
+  }
   lines.push("—————————");
   lines.push("المجموع: " + money(sub));
   if (hasVarPrice()) lines.push("💲 ملحوظة: في أصناف سعرها متغير يومياً (خضار وفاكهة) — السعر النهائي يتحدد عند تأكيد الطلب.");
@@ -1035,7 +1047,7 @@ function renderAdminOrders(body){
     var items = [];
     try { items = JSON.parse(o.items || "[]"); } catch(e){}
     var itemsHtml = items.map(function(it){
-      return '<div><span>'+esc(it.name)+' × '+fmt(it.qty)+'</span><span>'+money(Number(it.price)*Number(it.qty))+'</span></div>';
+      return '<div><span>'+esc(it.name)+' × '+fmt(it.qty)+(it.preorder ? ' 📦 هنوفره' : '')+'</span><span>'+money(Number(it.price)*Number(it.qty))+'</span></div>';
     }).join("");
     var when = "";
     try { when = new Date(o.created_at).toLocaleString("ar-EG", { dateStyle: "medium", timeStyle: "short" }); } catch(e){ when = String(o.created_at||""); }
