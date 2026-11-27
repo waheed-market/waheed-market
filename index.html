@@ -343,6 +343,7 @@ var state = {
   username: localStorage.getItem("wm_username") || "",
   adminTab: "products",
   adminCategory: null,    // القسم المفتوح في تبويب منتجات المدير
+  adminSubcat: null,      // القسم الفرعي المختار في المدير (null = الكل)
   adminSearch: "",
   orders: [], pending: [], assistants: [], assistantsLoaded: false,
   newOrdersCount: 0
@@ -901,7 +902,7 @@ function renderAdmin(){
   $("toStoreBtn").addEventListener("click", exitAdmin);
   var tabs = v.querySelectorAll("[data-tab]");
   for (var i=0;i<tabs.length;i++) tabs[i].addEventListener("click", function(){
-    state.adminTab = this.getAttribute("data-tab"); state.adminCategory = null; renderAdmin(); refreshAdminData();
+    state.adminTab = this.getAttribute("data-tab"); state.adminCategory = null; state.adminSubcat = null; renderAdmin(); refreshAdminData();
   });
   var body = $("adminBody");
   if (state.adminTab === "products") renderAdminProducts(body);
@@ -930,6 +931,7 @@ function renderAdminProducts(body){
   var q = state.adminSearch.trim();
   var html = '<div class="search-wrap"><span class="s-ico">🔍</span><input id="admSearch" type="search" placeholder="دوّر في كل المنتجات…" value="'+esc(state.adminSearch)+'"></div>';
   if (q) {
+    state.adminSubcat = null;
     var found = state.catalog.products.filter(function(p){ return p.name.indexOf(q) !== -1 || p.category.indexOf(q) !== -1; });
     html += '<p class="hint">'+found.length+' نتيجة لـ "'+esc(q)+'"</p>' + found.map(adminProductRow).join("");
     if (!found.length) html += '<div class="empty-msg">مفيش منتجات بالاسم ده 🤷</div>';
@@ -943,9 +945,19 @@ function renderAdminProducts(body){
   } else {
     var cat = state.adminCategory;
     var prods = state.catalog.products.filter(function(p){ return p.category === cat; });
+    /* تجميع منتجات القسم حسب القسم الفرعي (نفس قواعد subcatOf بتاعة واجهة العميل) — من غير إعادة ترتيب */
+    var groups = {}, order = [];
+    prods.forEach(function(p){ var s2 = subcatOf(p); if (!groups[s2]) { groups[s2] = []; order.push(s2); } groups[s2].push(p); });
+    if (state.adminSubcat && !groups[state.adminSubcat]) state.adminSubcat = null;
+    var shown = (state.adminSubcat && groups[state.adminSubcat]) ? groups[state.adminSubcat] : prods;
     html += '<div class="view-head"><button type="button" class="back-btn" id="admBackCats">→ كل الأقسام</button><h2 style="font-size:1.15rem">'+esc(cat)+' ('+prods.length+')</h2></div>'
-      + '<button type="button" class="big-btn btn-brand" id="admAddProd" style="margin:.4rem 0 .8rem">＋ إضافة منتج في القسم ده</button>'
-      + prods.map(adminProductRow).join("");
+      + '<button type="button" class="big-btn btn-brand" id="admAddProd" style="margin:.4rem 0 .8rem">＋ إضافة منتج في القسم ده</button>';
+    if (order.length > 1) {
+      html += '<div class="subchips"><button type="button" class="subchip'+(state.adminSubcat ? "" : " on")+'" data-admsub="">الكل ('+prods.length+')</button>';
+      order.forEach(function(n){ html += '<button type="button" class="subchip'+(state.adminSubcat === n ? " on" : "")+'" data-admsub="'+esc(n)+'">'+esc(n)+' ('+groups[n].length+')</button>'; });
+      html += '</div>';
+    }
+    html += shown.map(adminProductRow).join("");
     if (!prods.length) html += '<div class="empty-msg">القسم ده فاضي، ضيف أول منتج ➕</div>';
   }
   body.innerHTML = html;
@@ -957,8 +969,10 @@ function renderAdminProducts(body){
     var nsi = $("admSearch"); nsi.focus(); try { nsi.setSelectionRange(pos, pos); } catch(e){}
   });
   var oc = body.querySelectorAll("[data-opencat]");
-  for (var i=0;i<oc.length;i++) oc[i].addEventListener("click", function(){ state.adminCategory = this.getAttribute("data-opencat"); renderAdminProducts(body); });
-  var back = $("admBackCats"); if (back) back.addEventListener("click", function(){ state.adminCategory = null; renderAdminProducts(body); });
+  for (var i=0;i<oc.length;i++) oc[i].addEventListener("click", function(){ state.adminCategory = this.getAttribute("data-opencat"); state.adminSubcat = null; renderAdminProducts(body); });
+  var sc = body.querySelectorAll("[data-admsub]");
+  for (i=0;i<sc.length;i++) sc[i].addEventListener("click", function(){ state.adminSubcat = this.getAttribute("data-admsub") || null; renderAdminProducts(body); });
+  var back = $("admBackCats"); if (back) back.addEventListener("click", function(){ state.adminCategory = null; state.adminSubcat = null; renderAdminProducts(body); });
   var add = $("admAddProd"); if (add) add.addEventListener("click", function(){ openProductForm(null, state.adminCategory); });
   bindAdminProductRows(body);
 }
