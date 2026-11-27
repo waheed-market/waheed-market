@@ -423,7 +423,7 @@ function productCard(p){
     + (p.unit ? '<div class="prod-unit">'+esc(p.unit)+'</div>' : "")
     + '<div class="prod-price">' + (varPrice(p) ? '<span class="price-now">السعر متغير يومياً 💲</span>' : '<span class="price-now">'+money(p.price)+'</span>')
     + ((!varPrice(p) && p.old_price && Number(p.old_price) > Number(p.price)) ? '<span class="price-old">'+money(p.old_price)+'</span>' : "")
-    + '</div>' + (varPrice(p) ? '<div class="hint">يُحدد السعر عند تأكيد الطلب 📞</div>' : "") + '<div class="add-row">'+ctrl+'</div></div></article>';
+    + '</div>' + (varPrice(p) ? '<div class="hint">يُحدد السعر عند تأكيد الطلب 📞</div>' : "") + (!p.available ? '<div class="hint">السعر يُؤكد معاك قبل التوصيل 📞</div>' : "") + '<div class="add-row">'+ctrl+'</div></div></article>';
 }
 function bindProductCards(root){
   var add = root.querySelectorAll("[data-add]"), inc = root.querySelectorAll("[data-inc]"), dec = root.querySelectorAll("[data-dec]"), i;
@@ -579,7 +579,7 @@ function renderCartItems(){
   box.innerHTML = entries.map(function(e){
     var media = e.p.image_url ? '<img src="'+esc(e.p.image_url)+'" alt="" onerror="this.parentNode.textContent=\''+esc(e.p.emoji||"🛒")+'\'">' : esc(e.p.emoji||"🛒");
     var priceTxt = varPrice(e.p) ? 'السعر متغير — يُحدد عند التأكيد × '+e.qty : money(e.p.price)+' × '+e.qty+' = '+money(Number(e.p.price)*e.qty);
-    if (!e.p.available) priceTxt += ' • هنوفرهولك مع الطلب 📦';
+    if (!e.p.available) priceTxt += ' • هنوفرهولك مع الطلب — السعر يُؤكد قبل التوصيل 📦';
     return '<div class="cart-item"><div class="ci-media">'+media+'</div><div class="ci-info"><div class="ci-name">'+esc(e.p.name)+'</div><div class="ci-price">'+priceTxt+'</div></div>'
       + '<div class="qty-ctrl sm"><button type="button" data-cdec="'+e.p.id+'" aria-label="تقليل">−</button><span class="q">'+e.qty+'</span><button type="button" data-cinc="'+e.p.id+'" aria-label="زيادة">+</button></div></div>';
   }).join("");
@@ -595,7 +595,7 @@ function renderCartTotals(){
   if (del > 0 && free > 0) progress = '<div class="free-progress">ضيف منتجات بـ '+money(free - sub)+' كمان والتوصيل يبقى مجاني 🎉</div>';
   if (del === 0) progress = '<div class="free-progress">🎉 التوصيل مجاني لطلبك!</div>';
   if (hasVarPrice()) progress += '<div class="free-progress">💲 في أصناف سعرها متغير (خضار وفاكهة) — الإجمالي النهائي يتحدد عند تأكيد الطلب 📞</div>';
-  if (hasPreorder()) progress += '<div class="free-progress">📦 في أصناف غير متوفرة هنوفرها لك — هنأكد توفرها معاك قبل التوصيل</div>';
+  if (hasPreorder()) progress += '<div class="free-progress">📦 في أصناف غير متوفرة هنوفرها لك — هنأكد توفرها وسعرها معاك قبل التوصيل</div>';
   box.innerHTML = progress
     + '<div class="t-row"><span>المجموع الفرعي</span><span>'+money(sub)+'</span></div>'
     + '<div class="t-row"><span>التوصيل</span><span>'+(del === 0 ? "مجاني 🎉" : money(del))+'</span></div>'
@@ -638,7 +638,7 @@ function placeOrder(){
       '<p>رقم الطلب<br><span class="ord-num">#'+esc(j.order_id)+'</span></p>' +
       '<p style="font-weight:800">الإجمالي: '+money(j.total)+' <span class="hint">(شامل التوصيل '+ (Number(j.delivery) === 0 ? "المجاني" : money(j.delivery)) +')</span></p>' +
       (hasVar ? '<p class="hint">💲 في أصناف سعرها متغير يومياً — هنأكد سعرها معاك قبل التوصيل 📞</p>' : '') +
-      (hasPre ? '<p class="hint">📦 في أصناف غير متوفرة هنوفرها لك — هنأكد توفرها معاك قبل التوصيل.</p>' : '') +
+      (hasPre ? '<p class="hint">📦 في أصناف غير متوفرة هنوفرها لك — هنأكد توفرها وسعرها معاك قبل التوصيل.</p>' : '') +
       '<p class="hint">طريقة الدفع: '+esc(payLabel(data.payment_method))+(data.payment_method !== "cash" ? ' — حوّل على الرقم '+esc(payNumber(data.payment_method === "vodafone_cash" ? "vodafone" : "instapay")) : "")+'</p>' +
       '<button type="button" class="big-btn btn-brand" onclick="closeModal()">تمام، كمّل تسوّق 🛒</button></div>');
   }).catch(function(e){
@@ -661,6 +661,7 @@ function orderViaWhatsApp(){
   if (preEntries.length) {
     lines.push("📦 أصناف هنوفرها لك:");
     preEntries.forEach(function(e){ lines.push("• " + e.p.name + " × " + e.qty + " = " + money(Number(e.p.price) * e.qty) + " (هنوفرهولك)"); });
+    lines.push("السعر النهائي للأصناف دي هيتأكد معاك قبل التوصيل 📞");
   }
   lines.push("—————————");
   lines.push("المجموع: " + money(sub));
