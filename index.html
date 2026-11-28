@@ -216,6 +216,7 @@
   .toggle-btn.on{background:var(--brand-soft);color:var(--brand)}
   .toggle-btn.off{background:var(--danger-soft);color:var(--danger)}
   .status-pill{font-size:.75rem;font-weight:900;border-radius:999px;padding:.15rem .6rem}
+  .src-badge{background:#25d366;color:#fff;border-radius:999px;padding:.1rem .55rem;font-size:.75rem;font-weight:800;white-space:nowrap}
   .st-new{background:var(--danger-soft);color:var(--danger)}
   .st-preparing{background:var(--accent-soft);color:var(--accent)}
   .st-delivered{background:var(--brand-soft);color:var(--brand)}
@@ -752,6 +753,7 @@ function checkoutData(){
   var name = ($("custName").value || "").trim(), phone = ($("custPhone").value || "").trim(), addr = ($("custAddress").value || "").trim();
   if (!name || !phone || !addr) { toast("من فضلك اكتب الاسم والتليفون والعنوان 🙏"); return null; }
   return { customer_name: name, phone: phone, address: addr, notes: ($("orderNotes").value || "").trim(), payment_method: state.payment,
+    client_order_id: 'ord-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8),
     items: cartEntries().map(function(e){ return { id: e.p.id, qty: e.qty }; }) };
 }
 function placeOrder(){
@@ -777,6 +779,11 @@ function placeOrder(){
 }
 function orderViaWhatsApp(){
   var data = checkoutData(); if (!data) return;
+  if (state.waSending) return;
+  state.waSending = true;
+  var waBtn = $("waOrderBtn"); if (waBtn) waBtn.disabled = true;
+  function waDone(){ state.waSending = false; var b = $("waOrderBtn"); if (b) b.disabled = false; }
+  setTimeout(waDone, 8000);
   var s = state.settings || {};
   var wa = String(s.whatsapp || "").replace(/[^0-9]/g, "");
   if (!wa) { toast("رقم الواتساب مش متسجل، كلّم المحل مباشرة"); return; }
@@ -812,6 +819,8 @@ function orderViaWhatsApp(){
   lines.push("📞 التليفون: " + data.phone);
   lines.push("📍 العنوان: " + data.address);
   if (data.notes) lines.push("📝 ملاحظات: " + data.notes);
+  /* تسجيل الطلب في صفحة الطلبات بالمدير (بصوره) — في الخلفية، من غير ما يعطّل فتح واتساب */
+  try { api("placeOrder", Object.assign({}, data, { source: "whatsapp" })).then(function(){ waDone(); }).catch(function(){ waDone(); }); } catch (e) { waDone(); }
   window.open("https://wa.me/" + wa + "?text=" + encodeURIComponent(lines.join("\n")), "_blank");
 }
 $("cartBtn").addEventListener("click", openCart);
@@ -1331,7 +1340,7 @@ function renderAdminOrders(body){
     var actions = "";
     if (o.status === "new") actions = '<div class="adm-actions"><button type="button" class="btn-prep" data-st="preparing" data-oid="'+o.id+'">👨‍🍳 بدء التجهيز</button><button type="button" class="btn-cancel" data-st="cancelled" data-oid="'+o.id+'">إلغاء الطلب</button></div>';
     else if (o.status === "preparing") actions = '<div class="adm-actions"><button type="button" class="btn-done" data-st="delivered" data-oid="'+o.id+'">✅ تم التوصيل</button><button type="button" class="btn-cancel" data-st="cancelled" data-oid="'+o.id+'">إلغاء الطلب</button></div>';
-    return '<div class="adm-card"><div class="adm-row"><div class="adm-info"><b>طلب #'+o.id+' — '+esc(o.customer_name)+'</b>'
+    return '<div class="adm-card"><div class="adm-row"><div class="adm-info"><b>طلب #'+o.id+' — '+esc(o.customer_name)+'</b>' + (o.source === 'whatsapp' ? ' <span class="src-badge">💬 واتساب</span>' : '')
       + '<div class="sub">📞 <a href="tel:'+esc(o.phone)+'" style="color:inherit">'+esc(o.phone)+'</a> • '+esc(when)+'</div>'
       + '<div class="sub">📍 '+esc(o.address)+'</div>'
       + (o.notes ? '<div class="sub">📝 '+esc(o.notes)+'</div>' : "")
