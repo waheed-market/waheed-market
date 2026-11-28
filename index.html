@@ -231,6 +231,8 @@
   .pick-item .pick-name{flex:1;padding:0 .45rem;text-align:right}
   .pick-item.done .pick-name{text-decoration:line-through;opacity:.55}
   .pick-item.done .pick-check{opacity:1}
+  .pick-thumb{width:44px;height:44px;object-fit:cover;border-radius:10px;flex:none}
+  .pick-thumb.pick-emoji{display:flex;align-items:center;justify-content:center;font-size:1.35rem}
   .pick-progress{display:block!important;font-weight:900;color:var(--brand);padding:.35rem 0 0!important}
   .pick-progress.ready{color:var(--brand)}
   .store-tag{display:inline-block;font-size:.78rem;font-weight:700;color:var(--brand);background:color-mix(in srgb, var(--brand) 12%, transparent);border-radius:999px;padding:.05rem .45rem;margin-inline-start:.25rem;white-space:nowrap}
@@ -1279,6 +1281,12 @@ function setPicked(oid, map){ try { localStorage.setItem(pickedKey(oid), JSON.st
 function orderStatusLabel(st){
   return st === "preparing" ? "قيد التجهيز" : st === "delivered" ? "تم التوصيل" : st === "cancelled" ? "ملغي" : "جديد";
 }
+/* صورة مصغّرة لصنف في سطر التجهيز — عشان صاحب المحل يشوف صورة المنتج مع الطلب وميتلغبطش بين الأصناف المتشابهة (قرار 2026-11-28) */
+function pickThumb(e){
+  var img = (e.p && e.p.image_url) ? e.p.image_url : "";
+  var em = (e.p && e.p.emoji) || "🛒";
+  return img ? '<img class="pick-thumb" src="'+esc(img)+'" alt="" loading="lazy" onerror="this.outerHTML=\'<span class=&quot;pick-thumb pick-emoji&quot;>'+esc(em)+'</span>\'">' : '<span class="pick-thumb pick-emoji">'+esc(em)+'</span>';
+}
 function renderAdminOrders(body){
   if (!state.orders.length) { body.innerHTML = '<div class="empty-msg">مفيش طلبات واردة لسه 📭</div>'; return; }
   body.innerHTML = state.orders.map(function(o){
@@ -1296,7 +1304,7 @@ function renderAdminOrders(body){
     function pickRow(e){
       n++;
       var done = !!picked[e.idx];
-      return '<div class="pick-item' + (done ? ' done' : '') + '" data-oid="' + o.id + '" data-idx="' + e.idx + '"><span class="pick-check">' + (done ? '✅' : '☐') + '</span><span class="pick-name">' + n + ') ' + esc(e.name) + ' × ' + fmt(e.qty) + (e.preorder ? ' 📦 هنوفره' : '') + '</span><span>' + money(Number(e.price)*Number(e.qty)) + '</span></div>';
+      return '<div class="pick-item' + (done ? ' done' : '') + '" data-oid="' + o.id + '" data-idx="' + e.idx + '"><span class="pick-check">' + (done ? '✅' : '☐') + '</span>' + pickThumb(e) + '<span class="pick-name">' + n + ') ' + esc(e.name) + ' × ' + fmt(e.qty) + (e.preorder ? ' 📦 هنوفره' : '') + '</span><span>' + money(Number(e.price)*Number(e.qty)) + '</span></div>';
     }
     var itemsHtml = groupOrderItems(allEntries.filter(function(e){ return !e.preorder; })).map(function(g){
       var head = '<div class="pick-group">📦 ' + esc(g.cat) + (g.sub ? ' — ' + esc(g.sub) : '') + '</div>';
@@ -1312,7 +1320,7 @@ function renderAdminOrders(body){
         var rows = sg.items.map(function(e){
           n++;
           var done = !!picked[e.idx];
-          return '<div class="pick-item' + (done ? ' done' : '') + '" data-oid="' + o.id + '" data-idx="' + e.idx + '"><span class="pick-check">' + (done ? '✅' : '☐') + '</span><span class="pick-name">' + n + ') ' + esc(e.name) + ' × ' + fmt(e.qty) + ' 📦 هنوفره <span class="store-tag">🏪 ' + esc(storeLabel(e.p)) + '</span></span><span>' + money(Number(e.price)*Number(e.qty)) + '</span></div>';
+          return '<div class="pick-item' + (done ? ' done' : '') + '" data-oid="' + o.id + '" data-idx="' + e.idx + '"><span class="pick-check">' + (done ? '✅' : '☐') + '</span>' + pickThumb(e) + '<span class="pick-name">' + n + ') ' + esc(e.name) + ' × ' + fmt(e.qty) + ' 📦 هنوفره <span class="store-tag">🏪 ' + esc(storeLabel(e.p)) + '</span></span><span>' + money(Number(e.price)*Number(e.qty)) + '</span></div>';
         }).join("");
         return head + rows;
       }).join("");
