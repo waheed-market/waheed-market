@@ -409,6 +409,20 @@ function catImage(cat){
   return CAT_IMAGES[cat.name] || "";
 }
 
+/* ================== المعروض للعميل ================== */
+/* قرار صاحب المحل 2026-11-28: الكتالوج يعرض منتجات ألتو ماركت بس دلوقتي (عشان يبدأ يبعت الرابط للعملاء)، وباقي منتجات جرين وهداية مخفية من العرض بس — مش محذوفة من قاعدة البيانات — وتتزود بعدين. المنتجات المخفية هي المستوردة من جرين/هداية/هداية البحر (ids 220–1864). أي منتج جديد يضيفه صاحب المحل من المدير بيظهر عادي. عشان ترجع كل المنتجات للعرض: خلي SHOW_ALTO_ONLY = false */
+var SHOW_ALTO_ONLY = true;
+function isShownProduct(p){
+  if (!SHOW_ALTO_ONLY) return true;
+  return !(p.id >= 220 && p.id <= 1864);
+}
+function shownProducts(){
+  return (state.catalog ? state.catalog.products : []).filter(isShownProduct);
+}
+function shownCount(cat){
+  return shownProducts().filter(function(p){ return p.category === cat; }).length;
+}
+
 /* ================== واجهة العميل ================== */
 function renderHome(){
   if (!state.catalog) return;
@@ -417,14 +431,16 @@ function renderHome(){
   var cats = state.catalog.categories;
   var html = "";
   cats.forEach(function(c){
+    var n = shownCount(c.name);
+    if (n === 0) return;
     var img = catImage(c);
     var media = img ? '<img src="'+esc(img)+'" alt="'+esc(c.name)+'" loading="lazy" onerror="this.parentNode.innerHTML=\'<span class=&quot;cat-emoji&quot;>'+esc(c.emoji||"🛒")+'</span>\'">' : '<span class="cat-emoji">'+esc(c.emoji||"🛒")+'</span>';
-    html += '<button type="button" class="cat-card" data-cat="'+esc(c.name)+'"><span class="cat-media">'+media+'</span><span class="cat-info"><b>'+esc(c.emoji||"")+' '+esc(c.name)+'</b><span class="cat-count">'+fmt(c.product_count||0)+' منتج</span></span></button>';
+    html += '<button type="button" class="cat-card" data-cat="'+esc(c.name)+'"><span class="cat-media">'+media+'</span><span class="cat-info"><b>'+esc(c.emoji||"")+' '+esc(c.name)+'</b><span class="cat-count">'+fmt(n)+' منتج</span></span></button>';
   });
   $("catGrid").innerHTML = html;
   var cards = $("catGrid").querySelectorAll("[data-cat]");
   for (var i=0;i<cards.length;i++) cards[i].addEventListener("click", function(){ openCategory(this.getAttribute("data-cat")); });
-  var offers = state.catalog.products.filter(function(p){ return p.old_price && Number(p.old_price) > Number(p.price); });
+  var offers = shownProducts().filter(function(p){ return p.old_price && Number(p.old_price) > Number(p.price); });
   if (offers.length) {
     $("offersWrap").classList.remove("hidden");
     $("offersGrid").innerHTML = offers.map(productCard).join("");
@@ -564,14 +580,14 @@ function renderList(){
   if (!state.catalog) return;
   if (state.view === "category") {
     title = state.currentCategory;
-    items = state.catalog.products.filter(function(p){ return p.category === state.currentCategory; });
+    items = shownProducts().filter(function(p){ return p.category === state.currentCategory; });
   } else if (state.view === "offers") {
     title = "🔥 العروض";
-    items = state.catalog.products.filter(function(p){ return p.old_price && Number(p.old_price) > Number(p.price); });
+    items = shownProducts().filter(function(p){ return p.old_price && Number(p.old_price) > Number(p.price); });
   } else if (state.view === "search") {
     title = "نتائج البحث: " + state.searchQuery;
     var q = state.searchQuery.trim();
-    items = state.catalog.products.filter(function(p){ return p.name.indexOf(q) !== -1 || p.category.indexOf(q) !== -1; });
+    items = shownProducts().filter(function(p){ return p.name.indexOf(q) !== -1 || p.category.indexOf(q) !== -1; });
   }
   $("homeSections").classList.add("hidden");
   $("listSection").classList.remove("hidden");
